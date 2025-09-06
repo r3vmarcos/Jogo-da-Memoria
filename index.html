@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo da Memória</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Schoolbell&display=swap');
+
+        :root {
+            --card-size-h: 23vh;
+            --card-size-w: calc(var(--card-size-h) / 1.39);
+            --logo-w: 12vw;
+            --logo-h: auto;
+
+            --color-red-bg: #c9362d;    
+            --color-green-bg: #a8bd47;    
+            --color-red-apple: #c41710;    
+
+            --timer-arc-bg: #37514d00;    
+            --timer-center-bg: #ffffff1e; 
+            --timer-color-text: #000000; 
+        }
+        body{
+            font-family: 'Schoolbell', sans-serif;
+        }
+        .card-inner {
+            transform-style: preserve-3d;
+            transition: transform 0.6s;
+            position: relative;
+        }
+        .card.flipped .card-inner { transform: rotateY(180deg); }
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card-front {
+            background-image: url('assets/verso.png');
+            background-size: cover;
+            background-position: center;
+        }
+        .card-back { transform: rotateY(180deg); }
+        .card {
+            width: var(--card-size-w);
+            height: var(--card-size-h);
+        }
+        #game-logo img {
+            width: var(--logo-w);
+            height: var(--logo-h);
+        }
+        .timer-circle { transform: rotate(-90deg); }
+        .timer-path-remaining { stroke-linecap: round; }
+    </style>
+</head>
+<body class="z-0 h-screen w-screen flex items-center justify-center">
+
+    <!-- 🔹 Tela inicial -->
+    <div id="start-screen" 
+    class="absolute inset-0 w-screen h-screen flex items-center justify-center z-50" 
+    style="background: url('assets/screeninitial3.png') no-repeat center center; background-size: 100% 100%;">
+    
+   <button id="start-button" 
+       class="px-28 py-8 mt-[75vh] bg-[var(--color-red-apple)] text-black text-3xl font-bold rounded-3xl shadow-2xl hover:bg-lime-700 transition-transform duration-300 ease-in">
+       JOGAR
+   </button>
+</div>
+
+    <!-- 🔹 Jogo (inicia oculto até clicar em JOGAR) -->
+    <div id="game-wrapper" class="hidden w-full h-full flex">
+        <img src="assets/background5.png" class="z-10 absolute inset-0 h-full w-full bg-contain" alt="background">
+
+        <div id="itens-esquerda" class="h-screen flex-1 flex flex-col items-center justify-center">
+            <div id="game-logo" class="z-20 h-[30%] w-full flex items-end justify-center">
+                <img src="assets/logo.png" alt="Logo do Jogo">
+            </div>
+            <div id="game-space-l2" class="h-[40%] w-full flex items-center justify-center"></div>
+            <div id="game-pares" class="z-20 h-[30%] w-full flex flex-col items-center justify-start font-bold">
+                <span class="uppercase text-stone-900 text-5xl">PARES</span>
+                <span class="uppercase text-stone-900 text-1xl">ENCONTRADOS</span>
+                <span id="pares-count" class="text-8xl text-stone-900 mt-2">0</span>
+            </div>
+        </div>            
+
+        <div id="game-container" class="w-fit h-screen p-8 flex items-center justify-center">
+            <div id="game-grid" class="z-20 grid grid-cols-6 gap-2"></div>
+        </div>
+                
+        <div id="itens-direita" class="h-screen flex-1 flex flex-col items-center justify-center">
+            <div id="game-space-r1" class="h-[30%] z-20  w-full flex items-center justify-center"></div>
+            
+            <div id="game-time" class="h-[40%] z-20 w-full flex items-center justify-center">
+                <div class="relative w-40 h-40">
+                    <svg class="w-full h-full timer-circle" viewBox="0 0 100 100">
+                        <circle id="timer-bg" stroke-width="8" fill="transparent" r="45" cx="50" cy="50" stroke="var(--timer-arc-bg)" />
+                        <path id="timer-path-remaining"
+                            stroke-width="8"
+                            fill="transparent"
+                            d="M 50, 50
+                               m -45, 0
+                               a 45,45 0 1,0 90,0
+                               a 45,45 0 1,0 -90,0"
+                        ></path>
+                        <circle id="timer-center" r="35" cx="50" cy="50" fill="var(--timer-center-bg)"></circle>
+                    </svg>
+                    <span id="time-left" class="absolute inset-0 flex items-center justify-center text-5xl font-bold text-stone-900"></span>
+                </div>
+            </div>
+            
+            <div id="game-space-r3" class="h-[30%] w-full flex items-center justify-center"></div>
+        </div> 
+    </div>           
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const gameGrid = document.getElementById('game-grid');
+        const cardImages = [
+            'assets/carta1.png', 'assets/carta2.png', 'assets/carta3.png',
+            'assets/carta4.png', 'assets/carta5.png', 'assets/carta6.png',
+            'assets/carta7.png', 'assets/carta8.png', 'assets/carta9.png'
+        ];
+        
+        let cards = [];
+        let flippedCards = [];
+        let matchedCards = 0;
+        let canFlip = false;
+
+        const CONFIG = {
+            TIME_LIMIT: 45,
+            COLORS: {
+                default: "#10B981",
+                warning: "#FACC15",
+                alert: "#EF4444"
+            },
+            WARNING_THRESHOLD: 10,
+            ALERT_THRESHOLD: 5
+        };
+
+        const timeLeftEl = document.getElementById("time-left");
+        const timerPathRemaining = document.getElementById("timer-path-remaining");
+        const FULL_DASH_ARRAY = 283;
+        let timeLeft = CONFIG.TIME_LIMIT;
+        let timerAnimationId;
+        let startTime;
+
+        const updatePares = () => {
+            const pares = matchedCards / 2;
+            document.getElementById("pares-count").textContent = pares;
+        };
+
+        const shuffle = (array) => {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        };
+
+        const createBoard = () => {
+            gameGrid.innerHTML = '';
+            cards = shuffle([...cardImages, ...cardImages]);
+            matchedCards = 0;
+            updatePares();
+
+            const frag = document.createDocumentFragment();
+
+            cards.forEach((imageSrc, index) => {
+                const cardElement = document.createElement('div');
+                cardElement.classList.add('card', 'rounded-lg', 'shadow-md', 'cursor-pointer', 'transition-all', 'duration-300');
+                cardElement.setAttribute('data-index', index);
+                cardElement.setAttribute('data-image', imageSrc);
+                cardElement.innerHTML = `
+                    <div class="card-inner w-full h-full">
+                        <div class="card-front rounded-lg"></div>
+                        <div class="card-back rounded-lg">
+                            <img src="${imageSrc}" alt="Frente da Carta" class="w-full h-full object-cover rounded-lg" loading="lazy">
+                        </div>
+                    </div>
+                `;
+                frag.appendChild(cardElement);
+            });
+
+            gameGrid.appendChild(frag);
+        };
+
+        const previewCards = () => {
+            const allCards = document.querySelectorAll('.card');
+            allCards.forEach(c => c.classList.add('flipped'));
+
+            setTimeout(() => {
+                allCards.forEach(c => c.classList.remove('flipped'));
+                canFlip = true;
+                startTimer();
+            }, 5000);
+        };
+
+        gameGrid.addEventListener('click', (event) => {
+            if (!canFlip) return;
+            const card = event.target.closest('.card');
+            if (!card || card.classList.contains('flipped') || card.classList.contains('matched')) return;
+            flipCard(card);
+        });
+
+        const flipCard = (card) => {
+            if (!canFlip) return;
+            if (card.classList.contains('flipped') || flippedCards.length === 2) return;
+
+            card.classList.add('flipped');
+            flippedCards.push(card);
+
+            if (flippedCards.length === 2) {
+                canFlip = false;
+                setTimeout(checkMatch, 1000);
+            }
+        };
+
+        const checkMatch = () => {
+            const [card1, card2] = flippedCards;
+            const image1 = card1.dataset.image;
+            const image2 = card2.dataset.image;
+            
+            if (image1 === image2) {
+                card1.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none', 'matched');
+                card2.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none', 'matched');
+                matchedCards += 2;
+                updatePares();
+            } else {
+                card1.classList.remove('flipped');
+                card2.classList.remove('flipped');
+            }
+
+            flippedCards = [];
+            canFlip = true;
+        };
+
+        function startTimer() {
+            startTime = performance.now();
+            timerPathRemaining.setAttribute("stroke-dasharray", `${FULL_DASH_ARRAY} ${FULL_DASH_ARRAY}`);
+            timerAnimationId = requestAnimationFrame(updateTimer);
+        }
+
+        function updateTimer(timestamp) {
+            const elapsedTime = (timestamp - startTime) / 1000;
+            timeLeft = CONFIG.TIME_LIMIT - elapsedTime;
+
+            if (timeLeft <= 0) {
+                timeLeft = 0;
+                timeLeftEl.innerText = formatTime(timeLeft);
+                setCircleDasharray();
+                endGame();
+                return;
+            }
+
+            timeLeftEl.innerText = formatTime(timeLeft);
+            setCircleDasharray();
+            timerAnimationId = requestAnimationFrame(updateTimer);
+        }
+
+        function formatTime(time) {
+            return Math.ceil(time);
+        }
+
+        function calculateTimeFraction() {
+            return Math.max(0, timeLeft / CONFIG.TIME_LIMIT);
+        }
+
+        function setCircleDasharray() {
+            const circleDasharray = `${(
+                calculateTimeFraction() * FULL_DASH_ARRAY
+            ).toFixed(0)} 283`;
+            timerPathRemaining.setAttribute("stroke-dasharray", circleDasharray);
+
+            if (timeLeft <= CONFIG.ALERT_THRESHOLD) {
+                timerPathRemaining.setAttribute("stroke", CONFIG.COLORS.alert);
+            } else if (timeLeft <= CONFIG.WARNING_THRESHOLD) {
+                timerPathRemaining.setAttribute("stroke", CONFIG.COLORS.warning);
+            } else {
+                timerPathRemaining.setAttribute("stroke", CONFIG.COLORS.default);
+            }
+        }
+
+        function endGame() {
+            alert(`⏰ Fim de jogo! Você encontrou ${matchedCards/2} pares.`);
+            document.querySelectorAll('.card').forEach(c => {
+                c.style.pointerEvents = "none";
+            });
+            if (timerAnimationId) cancelAnimationFrame(timerAnimationId);
+        }
+
+        function preloadImages(list) {
+            setTimeout(() => {
+                list.forEach(src => {
+                    const img = new Image();
+                    img.src = src;
+                });
+                new Image().src = 'assets/logo.png';
+                new Image().src = '/assets/background.png';
+            }, 50);
+        }
+
+        // 🔹 Função que inicia o jogo após clicar em JOGAR
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-wrapper').classList.remove('hidden');
+            createBoard();
+            preloadImages(cardImages);
+            previewCards();
+        }
+
+        document.getElementById("start-button").addEventListener("click", startGame);
+    });
+</script>
+</body>
+</html>

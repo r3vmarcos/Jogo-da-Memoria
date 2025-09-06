@@ -27,7 +27,7 @@ O objetivo é encontrar todos os pares antes que o tempo acabe ⏳.
 ![Verso da carta](assets/verso.png)
 
 ### Exemplo de carta
-![Carta](assets/card1.png)
+![Carta](assets/card.png)
 
 ---
 
